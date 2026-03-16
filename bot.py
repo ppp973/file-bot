@@ -9,6 +9,7 @@ import logging
 import os
 import signal
 import sys
+import traceback
 from pyrogram import Client
 from config import Config
 from database import db
@@ -17,12 +18,9 @@ from handlers.upload import register_upload_handlers
 from handlers.finish import register_finish_handlers
 from utils.file_sender import FileSender
 
-# Remove uvloop import and use standard asyncio
-# asyncio.set_event_loop_policy is removed
-
-# Set up logging
+# Set up detailed logging
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.DEBUG,  # Changed to DEBUG for more details
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
         logging.StreamHandler(sys.stdout),
@@ -58,14 +56,23 @@ class FileStoreBot:
                 )
             
             # Validate configuration
+            logger.info("Validating configuration...")
             Config.validate()
-            logger.info("Configuration validated successfully")
+            logger.info("✅ Configuration validated successfully")
+            
+            # Print config (without sensitive data)
+            logger.info(f"ADMINS: {Config.ADMINS}")
+            logger.info(f"STORAGE_CHANNEL: {Config.STORAGE_CHANNEL}")
+            logger.info(f"BOT_TOKEN exists: {bool(Config.BOT_TOKEN)}")
+            logger.info(f"MONGO_URI exists: {bool(Config.MONGO_URI)}")
             
             # Connect to database
+            logger.info("Connecting to database...")
             await db.connect()
-            logger.info("Database connected")
+            logger.info("✅ Database connected")
             
             # Initialize Pyrogram client with Render-specific settings
+            logger.info("Initializing bot client...")
             self.client = Client(
                 "file_store_bot",
                 api_id=Config.API_ID,
@@ -73,23 +80,28 @@ class FileStoreBot:
                 bot_token=Config.BOT_TOKEN,
                 workers=20,
                 max_concurrent_transmissions=5,
-                sleep_threshold=60,  # Handle flood waits better
-                no_updates=False  # Enable updates
+                sleep_threshold=60,
+                no_updates=False,
+                in_memory=True  # Add this for better performance
             )
             
             # Initialize file sender
             self.file_sender = FileSender(self.client)
             
             # Register all handlers
+            logger.info("Registering handlers...")
             await self.register_handlers()
             
             # Start the bot
+            logger.info("Starting bot client...")
             await self.client.start()
-            logger.info("Bot started successfully!")
+            
+            # Get bot info
+            bot_info = await self.client.get_me()
+            logger.info(f"✅ Bot started successfully! @{bot_info.username}")
             
             # Send startup notification to storage channel
             try:
-                bot_info = await self.client.get_me()
                 await self.client.send_message(
                     Config.STORAGE_CHANNEL,
                     f"🚀 **Bot Started**\n\n"
@@ -98,16 +110,20 @@ class FileStoreBot:
                     f"⏰ **Time:** Bot is now online and ready!\n"
                     f"🖥️ **Platform:** Render (Free Tier)"
                 )
+                logger.info("Startup notification sent to storage channel")
             except Exception as e:
-                logger.error(f"Failed to send startup notification: {e}")
+                logger.error(f"❌ Failed to send startup notification: {e}")
+                logger.error("Check if STORAGE_CHANNEL is correct and bot is admin")
             
             # Keep the bot running with heartbeat
+            logger.info("Bot is now running. Waiting for messages...")
             while self.is_running:
-                await asyncio.sleep(60)  # Heartbeat every minute
+                await asyncio.sleep(60)
                 logger.debug("Bot heartbeat - still running")
             
         except Exception as e:
-            logger.error(f"Failed to start bot: {e}")
+            logger.error(f"❌ Failed to start bot: {e}")
+            logger.error(traceback.format_exc())
             raise
         finally:
             await self.stop()
@@ -124,7 +140,7 @@ class FileStoreBot:
         # Register finish handlers
         await register_finish_handlers(self.client, self.active_uploads)
         
-        logger.info("All handlers registered successfully")
+        logger.info("✅ All handlers registered successfully")
     
     async def stop(self):
         """Stop the bot and clean up"""
@@ -146,7 +162,7 @@ class FileStoreBot:
         if self.client:
             await self.client.stop()
         
-        logger.info("Bot stopped successfully")
+        logger.info("✅ Bot stopped successfully")
 
 async def main():
     """Main entry point"""
@@ -157,7 +173,8 @@ async def main():
     except KeyboardInterrupt:
         logger.info("Received keyboard interrupt")
     except Exception as e:
-        logger.error(f"Unexpected error: {e}")
+        logger.error(f"❌ Unexpected error: {e}")
+        logger.error(traceback.format_exc())
         sys.exit(1)
 
 if __name__ == "__main__":
