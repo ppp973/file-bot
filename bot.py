@@ -7,6 +7,9 @@ A secure file storage bot with protected content delivery
 import asyncio
 import uvloop
 import logging
+import os
+import signal
+import sys
 from pyrogram import Client
 from config import Config
 from database import db
@@ -18,7 +21,11 @@ from utils.file_sender import FileSender
 # Set up logging
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(sys.stdout),
+        logging.FileHandler('bot.log')
+    ]
 )
 logger = logging.getLogger(__name__)
 
@@ -33,10 +40,24 @@ class FileStoreBot:
         self.client = None
         self.file_sender = None
         self.active_uploads = {}
+        self.is_running = True
+        
+    async def shutdown(self, signal):
+        """Graceful shutdown"""
+        logger.info(f"Received exit signal {signal.name}...")
+        self.is_running = False
         
     async def start(self):
         """Start the bot and all components"""
         try:
+            # Setup signal handlers for graceful shutdown
+            loop = asyncio.get_running_loop()
+            for sig in (signal.SIGTERM, signal.SIGINT):
+                loop.add_signal_handler(
+                    sig,
+                    lambda s=sig: asyncio.create_task(self.shutdown(s))
+                )
+            
             # Validate configuration
             Config.validate()
             logger.info("Configuration validated successfully")
@@ -45,14 +66,16 @@ class FileStoreBot:
             await db.connect()
             logger.info("Database connected")
             
-            # Initialize Pyrogram client
+            # Initialize Pyrogram client with Render-specific settings
             self.client = Client(
                 "file_store_bot",
                 api_id=Config.API_ID,
                 api_hash=Config.API_HASH,
                 bot_token=Config.BOT_TOKEN,
-                workers=20,  # Increase workers for better performance
-                max_concurrent_transmissions=5
+                workers=20,
+                max_concurrent_transmissions=5,
+                sleep_threshold=60,  # Handle flood waits better
+                no_updates=False  # Enable updates
             )
             
             # Initialize file sender
@@ -73,17 +96,22 @@ class FileStoreBot:
                     f"🚀 **Bot Started**\n\n"
                     f"📦 **Name:** {bot_info.first_name}\n"
                     f"🤖 **Username:** @{bot_info.username}\n"
-                    f"⏰ **Time:** Bot is now online and ready!"
+                    f"⏰ **Time:** Bot is now online and ready!\n"
+                    f"🖥️ **Platform:** Render (Free Tier)"
                 )
             except Exception as e:
                 logger.error(f"Failed to send startup notification: {e}")
             
-            # Keep the bot running
-            await asyncio.Event().wait()
+            # Keep the bot running with heartbeat
+            while self.is_running:
+                await asyncio.sleep(60)  # Heartbeat every minute
+                logger.debug("Bot heartbeat - still running")
             
         except Exception as e:
             logger.error(f"Failed to start bot: {e}")
             raise
+        finally:
+            await self.stop()
     
     async def register_handlers(self):
         """Register all command handlers"""
@@ -103,6 +131,15 @@ class FileStoreBot:
         """Stop the bot and clean up"""
         logger.info("Stopping bot...")
         
+        # Send shutdown notification
+        try:
+            await self.client.send_message(
+                Config.STORAGE_CHANNEL,
+                "🛑 **Bot Stopping**\n\nBot is shutting down for maintenance or restart."
+            )
+        except:
+            pass
+        
         # Close database connection
         await db.close()
         
@@ -119,11 +156,10 @@ async def main():
     try:
         await bot.start()
     except KeyboardInterrupt:
-        logger.info("Received shutdown signal")
+        logger.info("Received keyboard interrupt")
     except Exception as e:
         logger.error(f"Unexpected error: {e}")
-    finally:
-        await bot.stop()
+        sys.exit(1)
 
 if __name__ == "__main__":
     asyncio.run(main())
