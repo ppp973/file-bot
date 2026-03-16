@@ -5,7 +5,6 @@ A secure file storage bot with protected content delivery
 """
 
 import asyncio
-import uvloop
 import logging
 import os
 import signal
@@ -18,6 +17,9 @@ from handlers.upload import register_upload_handlers
 from handlers.finish import register_finish_handlers
 from utils.file_sender import FileSender
 
+# Remove uvloop import and use standard asyncio
+# asyncio.set_event_loop_policy is removed
+
 # Set up logging
 logging.basicConfig(
     level=logging.INFO,
@@ -28,9 +30,6 @@ logging.basicConfig(
     ]
 )
 logger = logging.getLogger(__name__)
-
-# Use uvloop for better performance
-asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
 
 class FileStoreBot:
     """Main bot class"""
