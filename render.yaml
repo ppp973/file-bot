@@ -1,7 +1,9 @@
 services:
   - type: worker
     name: telegram-file-store-bot
-    env: python
+    runtime: python
+    region: virginia  # Matches your region
+    plan: free  # Using free tier
     buildCommand: pip install -r requirements.txt
     startCommand: python bot.py
     envVars:
@@ -12,8 +14,8 @@ services:
       - key: API_HASH
         value: bab9855c442e9e4e87f413cb5b9dc3f9
       - key: MONGO_URI
-        value: mongodb+srv://vipheromod_db_user:<db_password>@cluster0.vfwzaec.mongodb.net/?appName=Cluster0
+        sync: false  # You'll need to add this manually
       - key: ADMINS
-        value: 8033638335  # Replace with your admin ID
+        value: 123456789  # Replace with your admin ID
       - key: STORAGE_CHANNEL
-        value: -1003850875429  # Replace with your channel ID
+        value: -1001234567890  # Replace with your channel ID
