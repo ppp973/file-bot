@@ -1,0 +1,19 @@
+services:
+  - type: worker
+    name: telegram-file-store-bot
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: python bot.py
+    envVars:
+      - key: BOT_TOKEN
+        value: 8781174136:AAGaqdtP5i-AHAUmMy5ZXIjIj-QxF9IU-aQ
+      - key: API_ID
+        value: 21503125
+      - key: API_HASH
+        value: bab9855c442e9e4e87f413cb5b9dc3f9
+      - key: MONGO_URI
+        value: mongodb+srv://vipheromod_db_user:<db_password>@cluster0.vfwzaec.mongodb.net/?appName=Cluster0
+      - key: ADMINS
+        value: 8033638335  # Replace with your admin ID
+      - key: STORAGE_CHANNEL
+        value: -1003850875429  # Replace with your channel ID
